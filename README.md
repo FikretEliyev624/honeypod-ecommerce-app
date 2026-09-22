@@ -68,6 +68,12 @@ The simplest way:
 npm run demo
 ```
 
+To hit a deployed honeypot instead of the local one, pass its URL:
+
+```bash
+npm run demo -- https://your-honeypot.onrender.com
+```
+
 Or manually with `curl`:
 
 ```bash

@@ -8,7 +8,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const PORT = Number(process.env.HONEYPOT_PORT) || 8080;
-const BASE = `http://localhost:${PORT}`;
+// Target: CLI argument, then HONEYPOT_URL, otherwise the local honeypot.
+//   npm run demo -- https://my-honeypot.onrender.com
+const BASE = (process.argv[2] || process.env.HONEYPOT_URL || `http://localhost:${PORT}`).replace(
+  /\/+$/,
+  '',
+);
 
 const UA = {
   sqlmap: 'sqlmap/1.7.2#stable (http://sqlmap.org)',

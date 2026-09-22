@@ -73,7 +73,7 @@ async function askOllama(prompt) {
 
 async function askGroq(prompt) {
   const key = process.env.GROQ_API_KEY;
-  if (!key) throw new Error('GROQ_API_KEY is not set in the .env file.');
+  if (!key) throw new Error('GROQ_API_KEY is not set (env variable or .env file).');
 
   const data = await postJson('https://api.groq.com/openai/v1/chat/completions', {
     headers: { authorization: `Bearer ${key}` },
@@ -92,7 +92,7 @@ async function askGroq(prompt) {
 
 async function askGemini(prompt) {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY is not set in the .env file.');
+  if (!key) throw new Error('GEMINI_API_KEY is not set (env variable or .env file).');
 
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${llmModelName()}:generateContent` +

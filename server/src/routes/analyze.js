@@ -223,11 +223,21 @@ router.post('/api/analyze', async (req, res, next) => {
     // Split the events into batches of ${MAX_EVENTS} (to fit the LLM context).
     const classifications = [];
     let fallback = false;
-    for (let i = 0; i < allEvents.length; i += MAX_EVENTS) {
-      const batch = allEvents.slice(i, i + MAX_EVENTS);
-      const res2 = await classifyBatch(batch);
-      classifications.push(...res2.classifications);
-      fallback = fallback || res2.fallback;
+    try {
+      for (let i = 0; i < allEvents.length; i += MAX_EVENTS) {
+        const batch = allEvents.slice(i, i + MAX_EVENTS);
+        const res2 = await classifyBatch(batch);
+        classifications.push(...res2.classifications);
+        fallback = fallback || res2.fallback;
+      }
+    } catch (err) {
+      // The provider is unreachable / misconfigured. Report the actual reason instead of a
+      // generic 500 — it names the provider, not any credential.
+      console.error('[analyze] Classification failed:', err.message);
+      res.status(502).json({
+        error: `LLM request failed (${llmLabel()}): ${trim(err.message, 300)}`,
+      });
+      return;
     }
 
     const events = allEvents; // used as context below

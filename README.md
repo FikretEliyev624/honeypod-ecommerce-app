@@ -155,6 +155,8 @@ a note about it is added to the report.
 | `Could not connect to the LLM` | is Ollama running: `ollama list`, is the model pulled: `ollama pull llama3.1` |
 | Analysis takes too long | use a smaller model (`llama3.2`) or `LLM_PROVIDER="groq"` |
 | `No new events to analyze.` | send some traffic to the honeypot first (`npm run demo`) |
+| `vite: not found` / `prisma: not found` during a hosted build | the build ran with `NODE_ENV=production`, which skips devDependencies — use `npm ci --include=dev` |
+| the dashboard service exits right after start | it would be public without credentials — set `DASHBOARD_USER` and `DASHBOARD_PASSWORD` |
 
 ## Deployment
 
@@ -218,7 +220,7 @@ Free-tier caveats:
 - the LLM must be a hosted API (`groq` or `gemini`); `ollama` only works where you run it.
 
 Deploying without the blueprint is the same thing by hand: two **Web Services** from one
-repo, runtime Node, build `npm ci && npx prisma generate` (the dashboard also needs
+repo, runtime Node, build `npm ci --include=dev && npx prisma generate` (the dashboard also needs
 `&& npm run build && npx prisma migrate deploy`), start `node server/src/index.js`, plus
 `SERVICE=honeypot` / `SERVICE=dashboard` and `NODE_ENV=production`.
 
@@ -232,7 +234,7 @@ file for multi-service repos, so set them up in the UI:
 
 | Setting | `honeypot` service | `dashboard` service |
 |---|---|---|
-| Build command | `npm ci && npx prisma generate` | `npm ci && npx prisma generate && npm run build && npx prisma migrate deploy` |
+| Build command | `npm ci --include=dev && npx prisma generate` | `npm ci --include=dev && npx prisma generate && npm run build && npx prisma migrate deploy` |
 | Start command | `node server/src/index.js` | `node server/src/index.js` |
 | Variables | `NODE_ENV=production`, `SERVICE=honeypot`, `DATABASE_URL`, `DIRECT_URL` | `NODE_ENV=production`, `SERVICE=dashboard`, `DATABASE_URL`, `DIRECT_URL`, `DASHBOARD_USER`, `DASHBOARD_PASSWORD`, `LLM_PROVIDER=groq`, `GROQ_API_KEY` |
 | Public domain | generate one — this is the bait URL | generate one — protected by Basic auth |

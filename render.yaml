@@ -7,7 +7,7 @@ services:
     name: honeypod-honeypot
     runtime: node
     plan: free
-    buildCommand: npm ci && npx prisma generate
+    buildCommand: npm ci --include=dev && npx prisma generate
     startCommand: node server/src/index.js
     envVars:
       - key: NODE_ENV
@@ -25,7 +25,7 @@ services:
     runtime: node
     plan: free
     healthCheckPath: /health
-    buildCommand: npm ci && npx prisma generate && npm run build && npx prisma migrate deploy
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build && npx prisma migrate deploy
     startCommand: node server/src/index.js
     envVars:
       - key: NODE_ENV

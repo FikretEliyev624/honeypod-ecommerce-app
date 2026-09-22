@@ -222,7 +222,25 @@ repo, runtime Node, build `npm ci && npx prisma generate` (the dashboard also ne
 `&& npm run build && npx prisma migrate deploy`), start `node server/src/index.js`, plus
 `SERVICE=honeypot` / `SERVICE=dashboard` and `NODE_ENV=production`.
 
-### Option B — your own VPS (no Docker)
+### Option B — Railway (no Docker)
+
+Railway builds the repo with Nixpacks, so no Dockerfile is involved. It has no permanent
+free tier (a trial credit, then a paid plan), but services do not sleep.
+
+Create **one project with two services from the same repo** — Railway has no blueprint
+file for multi-service repos, so set them up in the UI:
+
+| Setting | `honeypot` service | `dashboard` service |
+|---|---|---|
+| Build command | `npm ci && npx prisma generate` | `npm ci && npx prisma generate && npm run build && npx prisma migrate deploy` |
+| Start command | `node server/src/index.js` | `node server/src/index.js` |
+| Variables | `NODE_ENV=production`, `SERVICE=honeypot`, `DATABASE_URL`, `DIRECT_URL` | `NODE_ENV=production`, `SERVICE=dashboard`, `DATABASE_URL`, `DIRECT_URL`, `DASHBOARD_USER`, `DASHBOARD_PASSWORD`, `LLM_PROVIDER=groq`, `GROQ_API_KEY` |
+| Public domain | generate one — this is the bait URL | generate one — protected by Basic auth |
+
+`PORT` is injected by Railway; the app picks it up automatically whenever `SERVICE` is not
+`both`. Do not set `HONEYPOT_PORT`/`API_PORT` there.
+
+### Option C — your own VPS (no Docker)
 
 ```bash
 npm ci
@@ -269,7 +287,7 @@ location / {
 }
 ```
 
-### Option C — Docker (optional)
+### Option D — Docker (optional)
 
 `Dockerfile` and `docker-compose.yml` are included for whoever wants them:
 

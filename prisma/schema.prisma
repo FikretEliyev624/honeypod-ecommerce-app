@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (6543)
+  directUrl = env("DIRECT_URL")   // direct (5432) — migration üçün
+}
+
+model HoneypotEvent {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  ip        String
+  method    String
+  path      String
+  query     String?
+  userAgent String?
+  headers   Json
+  body      String?
+  route     String?  // hansı saxta tələ işə düşdü
+  attackType String? // AI doldurur
+  severity   String? // low | medium | high
+  analyzed   Boolean @default(false)
+
+  @@index([ip])
+  @@index([createdAt])
+  @@index([attackType])
+  @@index([analyzed])
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  model      String
+  eventCount Int
+  summary    String   @db.Text
+  breakdown  Json // [{ type, severity, count }]
+}

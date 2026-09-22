@@ -1,4 +1,4 @@
-// AI təhlili — hazır modeldən istifadə edir, HEÇ NƏ TRAIN EDİLMİR.
+// AI analysis — uses a pre-trained model, NOTHING IS EVER TRAINED.
 import express from 'express';
 import { prisma } from '../prisma.js';
 import { askLLM, llmLabel } from '../lib/llm.js';
@@ -26,8 +26,8 @@ function trim(value, max) {
   return str.length > max ? `${str.slice(0, max)}…` : str;
 }
 
-// Hadisələri modelə göndərmək üçün qısa, sətir-sətir siyahıya çevirir.
-// Real uuid-lər əvəzinə 1..N nömrələri verilir (token qənaəti + parse asanlığı).
+// Turns the events into a short, one-per-line list for the model.
+// Numbers 1..N are used instead of real uuids (saves tokens + easier to parse).
 function formatEvents(events) {
   return events
     .map((e, i) => {
@@ -106,12 +106,12 @@ Return plain text only: no markdown headings (#), no bold markers (**), no code 
 Do not repeat the classification list verbatim — interpret it.`;
 }
 
-// Modelin cavabındakı ```json çərçivələrini və artıq mətni təmizləyir.
+// Strips ```json fences and any extra prose from the model response.
 function extractJsonArray(raw) {
   if (typeof raw !== 'string') return null;
   let text = raw.trim();
 
-  // ```json ... ``` çərçivəsini sil
+  // remove the ```json ... ``` fence
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) text = fence[1].trim();
 
@@ -127,8 +127,8 @@ function extractJsonArray(raw) {
   }
 }
 
-// Modelin verdiyi təsnifatı hadisələrə bağlayır.
-// Parse alınmasa və ya dəyər siyahıdan kənardırsa — unknown/low fallback.
+// Maps the model's classification back onto the events.
+// If parsing fails or a value is outside the allowed list — unknown/low fallback.
 function mapClassifications(events, parsed) {
   const result = events.map((e) => ({ id: e.id, attackType: 'unknown', severity: 'low' }));
   if (!parsed) return { result, fallback: true };
@@ -149,7 +149,7 @@ function mapClassifications(events, parsed) {
   return { result, fallback: matched === 0 };
 }
 
-// [{type, severity, count}] bölgüsü
+// [{type, severity, count}] breakdown
 function buildBreakdown(classifications) {
   const map = new Map();
   for (const c of classifications) {
@@ -164,7 +164,7 @@ function buildBreakdown(classifications) {
     .sort((a, b) => b.count - a.count);
 }
 
-// Eyni (attackType, severity) cütü olan hadisələr bir updateMany ilə yenilənir.
+// Events sharing the same (attackType, severity) pair are updated in one updateMany.
 async function persistClassifications(classifications) {
   const groups = new Map();
   for (const c of classifications) {
@@ -184,7 +184,7 @@ async function persistClassifications(classifications) {
   await prisma.$transaction(updates);
 }
 
-// Bir dəstə hadisəni təsnif edib bazada yeniləyir.
+// Classifies one batch of events and updates them in the database.
 async function classifyBatch(events) {
   const rawClassification = await askLLM(buildClassifyPrompt(events));
   const parsed = extractJsonArray(rawClassification);
@@ -198,18 +198,18 @@ async function classifyBatch(events) {
 }
 
 // POST /api/analyze
-//   body.reanalyze=true  → köhnə (artıq təhlil olunmuş) hadisələr də yeni promptla
-//                          yenidən təsnif olunur (hamısı, hissə-hissə).
-//   default               → yalnız analiz edilməmiş hadisələr (ən yeni ${MAX_EVENTS}).
+//   body.reanalyze=true  → old (already analyzed) events are re-classified with the
+//                          current prompt too (all of them, batch by batch).
+//   default               → only unanalyzed events (the newest ${MAX_EVENTS}).
 router.post('/api/analyze', async (req, res, next) => {
   try {
     const reanalyze = req.body?.reanalyze === true;
 
-    // Yenidən təhlildə bütün hadisələr, əks halda yalnız yenilər.
+    // A re-analysis takes every event, otherwise only the new ones.
     const allEvents = await prisma.honeypotEvent.findMany({
       where: reanalyze ? {} : { analyzed: false },
       orderBy: { createdAt: 'desc' },
-      // Yenidən təhlildə hamısını, adi rejimdə isə bir dəstəni götürürük.
+      // Re-analysis takes all of them, normal mode takes a single batch.
       take: reanalyze ? undefined : MAX_EVENTS,
     });
 
@@ -220,7 +220,7 @@ router.post('/api/analyze', async (req, res, next) => {
       return;
     }
 
-    // Hadisələri ${MAX_EVENTS}-lik dəstələrə bölürük (LLM konteksti üçün).
+    // Split the events into batches of ${MAX_EVENTS} (to fit the LLM context).
     const classifications = [];
     let fallback = false;
     for (let i = 0; i < allEvents.length; i += MAX_EVENTS) {
@@ -230,14 +230,14 @@ router.post('/api/analyze', async (req, res, next) => {
       fallback = fallback || res2.fallback;
     }
 
-    const events = allEvents; // aşağıdakı kontekst üçün
+    const events = allEvents; // used as context below
 
-    // Bölgü + kontekst
+    // Breakdown + context
     const breakdown = buildBreakdown(classifications);
     const topIps = [...new Set(events.map((e) => e.ip))].slice(0, 5);
     const topPaths = [...new Set(events.map((e) => trim(e.path, 60)))].slice(0, 8);
 
-    // 4) Xülasə üçün ikinci LLM çağırışı — uğursuz olsa da hesabat yaradılır.
+    // 4) Second LLM call for the summary — the report is created even if it fails.
     let summary;
     try {
       summary = (await askLLM(buildSummaryPrompt(breakdown, events.length, topIps, topPaths))).trim();
@@ -253,7 +253,7 @@ router.post('/api/analyze', async (req, res, next) => {
       summary = `[Note: the model response could not be parsed, events were marked unknown/low.]\n\n${summary}`;
     }
 
-    // 5) Hesabatı saxla
+    // 5) Store the report
     const report = await prisma.report.create({
       data: {
         model: llmLabel(),
@@ -271,7 +271,7 @@ router.post('/api/analyze', async (req, res, next) => {
 
 export default router;
 
-// Test/debug üçün açılan köməkçi funksiyalar.
+// Helpers exported for tests/debugging.
 export {
   extractJsonArray,
   mapClassifications,

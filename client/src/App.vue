@@ -8,7 +8,7 @@ import Dashboard from './components/Dashboard.vue';
 
 <style>
 :root {
-  /* Dərin slate/ink fon + siqnal-amber/qırmızı vurğular */
+  /* Deep slate/ink background + signal amber/red accents */
   --ink-900: #080b11;
   --ink-800: #0d121b;
   --ink-700: #131a26;

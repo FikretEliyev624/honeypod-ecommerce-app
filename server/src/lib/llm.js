@@ -1,5 +1,5 @@
-// Hazır (pre-trained) modelə müraciət. HEÇ BİR MODEL TRAIN EDİLMİR.
-// Provayder `LLM_PROVIDER` env dəyişəni ilə seçilir: ollama | groq | gemini.
+// Calls a pre-trained model. NO MODEL IS EVER TRAINED HERE.
+// The provider is selected with the `LLM_PROVIDER` env variable: ollama | groq | gemini.
 
 const DEFAULTS = {
   ollama: 'llama3.1',
@@ -7,7 +7,7 @@ const DEFAULTS = {
   gemini: 'gemini-2.0-flash',
 };
 
-// Yerli model yavaş cavab verə bilər — geniş timeout.
+// A local model can be slow to answer — generous timeout.
 const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 180_000;
 
 export function llmProvider() {
@@ -21,7 +21,7 @@ export function llmModelName() {
   return process.env.OLLAMA_MODEL || DEFAULTS.ollama;
 }
 
-// Hesabatda saxlanılan etiket, məsələn "ollama/llama3.1".
+// Label stored on the report, e.g. "ollama/llama3.1".
 export function llmLabel() {
   return `${llmProvider()}/${llmModelName()}`;
 }
@@ -112,7 +112,7 @@ async function askGemini(prompt) {
 }
 
 /**
- * Modelə sorğu göndərir və mətn cavabı qaytarır.
+ * Sends a prompt to the model and returns its text answer.
  * @param {string} prompt
  * @returns {Promise<string>}
  */

@@ -31,17 +31,17 @@ let timer = null;
 
 const lastReport = computed(() => reports.value[0] || null);
 
-// Model qadağaya baxmayaraq markdown qaytara bilir — göstərməzdən əvvəl təmizlənir.
+// The model may return markdown despite being told not to — cleaned before display.
 function cleanMarkdown(text) {
   return text
-    .replace(/\*\*|__|`/g, '') // qalın/kod işarələri
-    .replace(/^#{1,6}\s*/gm, '') // başlıq prefiksləri
-    .replace(/^\s*[=-]{3,}\s*$/gm, '') // markdown alt-xətt sətirləri
+    .replace(/\*\*|__|`/g, '') // bold/code markers
+    .replace(/^#{1,6}\s*/gm, '') // heading prefixes
+    .replace(/^\s*[=-]{3,}\s*$/gm, '') // markdown underline rules
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-// Xülasədəki "Tövsiyələr:" hissəsini ayırıb siyahı kimi göstərmək üçün.
+// Splits the "Recommendations:" part out of the summary so it can be shown as a list.
 const reportParts = computed(() => {
   if (!lastReport.value) return { text: '', tips: [] };
   const raw = cleanMarkdown(lastReport.value.summary || '');
@@ -50,7 +50,7 @@ const reportParts = computed(() => {
 
   const tips = raw
     .slice(idx)
-    .replace(/^recommendations\s*:?/i, '') // başlığın özünü at
+    .replace(/^recommendations\s*:?/i, '') // drop the heading itself
     .split('\n')
     .map((line) => line.replace(/^\s*[-•*\d.)]+\s*/, '').trim())
     .filter(Boolean);
@@ -89,7 +89,7 @@ async function loadAll({ silent = false } = {}) {
   }
 }
 
-// reanalyze=true → köhnə hadisələr də yeni promptla yenidən təsnif olunur.
+// reanalyze=true → old events are re-classified with the current prompt as well.
 async function analyze(reanalyze = false) {
   analyzing.value = true;
   error.value = '';
@@ -193,7 +193,7 @@ onUnmounted(() => clearInterval(timer));
     <p v-if="error" class="banner err">{{ error }}</p>
     <p v-if="notice" class="banner ok">{{ notice }}</p>
 
-    <!-- Statistika kartları -->
+    <!-- Stat cards -->
     <section class="cards">
       <div class="card">
         <span class="k">Total requests</span>
@@ -218,7 +218,7 @@ onUnmounted(() => clearInterval(timer));
     </section>
 
     <div class="grid">
-      <!-- Son hesabat -->
+      <!-- Latest report -->
       <section class="panel report">
         <div class="panel-head">
           <h2>Latest AI report</h2>
@@ -250,7 +250,7 @@ onUnmounted(() => clearInterval(timer));
         </template>
       </section>
 
-      <!-- Top siyahılar -->
+      <!-- Top lists -->
       <section class="panel">
         <div class="panel-head"><h2>Most active sources</h2></div>
         <div class="list-head">IP address</div>
@@ -277,7 +277,7 @@ onUnmounted(() => clearInterval(timer));
       </section>
     </div>
 
-    <!-- Hadisə cədvəli -->
+    <!-- Event table -->
     <section class="panel">
       <div class="panel-head">
         <h2>Events</h2>
@@ -375,7 +375,7 @@ onUnmounted(() => clearInterval(timer));
   padding: 24px 28px 60px;
 }
 
-/* ── Üst panel ─────────────────────────────────────────── */
+/* ── Top bar ───────────────────────────────────────────── */
 .topbar {
   display: flex;
   align-items: center;
@@ -486,7 +486,7 @@ onUnmounted(() => clearInterval(timer));
   color: #7fd8c6;
 }
 
-/* ── Kartlar ───────────────────────────────────────────── */
+/* ── Cards ─────────────────────────────────────────────── */
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -525,7 +525,7 @@ onUnmounted(() => clearInterval(timer));
   color: var(--text-faint);
 }
 
-/* ── Şəbəkə / panellər ─────────────────────────────────── */
+/* ── Grid / panels ─────────────────────────────────────── */
 .grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
@@ -613,7 +613,7 @@ onUnmounted(() => clearInterval(timer));
   border: 1px solid;
 }
 
-/* ── Bar siyahıları ────────────────────────────────────── */
+/* ── Bar lists ─────────────────────────────────────────── */
 .list-head {
   font-size: 11px;
   text-transform: uppercase;
@@ -658,7 +658,7 @@ onUnmounted(() => clearInterval(timer));
   text-align: right;
 }
 
-/* ── Cədvəl ────────────────────────────────────────────── */
+/* ── Table ─────────────────────────────────────────────── */
 .filters {
   display: flex;
   align-items: center;
@@ -780,7 +780,7 @@ tbody td {
   overflow-wrap: anywhere;
 }
 
-/* ── Kritiklik nişanları ───────────────────────────────── */
+/* ── Severity badges ───────────────────────────────────── */
 .sev {
   font-family: var(--mono);
   font-size: 10.5px;

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Web honeypot + AI təhlili dashboard-u (PEVN + Supabase + Prisma)",
+  "description": "Web honeypot + AI analysis dashboard (PEVN + Supabase + Prisma)",
   "workspaces": [
     "server",
     "client"
@@ -13,9 +13,12 @@
     "dev:server": "npm run dev --workspace server",
     "dev:client": "npm run dev --workspace client",
     "build": "npm run build --workspace client",
+    "start": "node server/src/index.js",
+    "deploy:start": "prisma migrate deploy && node server/src/index.js",
     "demo": "node scripts/demo-traffic.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio"
   },
   "devDependencies": {
@@ -23,6 +26,6 @@
     "prisma": "^6.3.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }

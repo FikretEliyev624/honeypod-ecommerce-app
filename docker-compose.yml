@@ -1,0 +1,24 @@
+# Honeypod — one container, two servers.
+#   8080 → the public FAKE site (the honeypot)
+#   3000 → the dashboard (API + UI), published to localhost ONLY
+services:
+  honeypod:
+    build: .
+    image: honeypod:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HONEYPOT_HOST: 0.0.0.0
+      API_HOST: 0.0.0.0 # inside the container; the port mapping below keeps it private
+      HONEYPOT_PORT: 8080
+      API_PORT: 3000
+    ports:
+      - '8080:8080'
+      - '127.0.0.1:3000:3000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

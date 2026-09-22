@@ -1,10 +1,10 @@
-// DAXİLİ dashboard API-si. Bu router internetə açılmamalıdır.
+// The INTERNAL dashboard API. This router must never be exposed to the internet.
 import express from 'express';
 import { prisma } from '../prisma.js';
 
 const router = express.Router();
 
-// groupBy nəticəsini sadə {value, count} siyahısına çevirib çoxdan aza sıralayır.
+// Turns a groupBy result into a simple {value, count} list sorted from most to least.
 function toCounts(rows, field, take = 0) {
   const list = rows
     .map((row) => ({ value: row[field] ?? 'unknown', count: row._count._all }))
@@ -12,7 +12,7 @@ function toCounts(rows, field, take = 0) {
   return take > 0 ? list.slice(0, take) : list;
 }
 
-// GET /api/stats — ümumi mənzərə
+// GET /api/stats — the overall picture
 router.get('/api/stats', async (req, res, next) => {
   try {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -52,8 +52,8 @@ router.get('/api/stats', async (req, res, next) => {
     res.json({
       totalEvents,
       uniqueIps: ipRows.length,
-      // Sorğular paralel getdiyi üçün canlı trafik zamanı saylar bir-birindən
-      // bir neçə hadisə geri qala bilər — mənfi dəyər göstərməmək üçün clamp.
+      // The queries run in parallel, so under live traffic the counters can drift by a
+      // few events — clamped so we never show a negative number.
       analyzedEvents: Math.max(totalEvents - unanalyzed, 0),
       unanalyzedEvents: unanalyzed,
       last24hEvents: last24h,
@@ -97,7 +97,7 @@ router.get('/api/events', async (req, res, next) => {
   }
 });
 
-// GET /api/reports — ən yenidən köhnəyə
+// GET /api/reports — newest first
 router.get('/api/reports', async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);

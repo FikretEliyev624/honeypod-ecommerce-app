@@ -1,7 +1,7 @@
-// SAXTA SAYT — internetə açılan honeypot (e-commerce mağaza görkəmində).
-// Bu routerdə YALNIZ tələ səhifələri və loglama var.
-// Heç bir admin/dashboard endpointi, heç bir icra (exec/eval), heç bir real sirr,
-// heç bir real ödəniş emalı YOXDUR. Bütün kart/məhsul datası uydurmadır.
+// THE FAKE SITE — the internet-facing honeypot (disguised as an e-commerce store).
+// This router contains ONLY lure pages and logging.
+// There is NO admin/dashboard endpoint, NO execution (exec/eval), NO real secret
+// and NO real payment processing. All card/product data is made up.
 import express from 'express';
 import { prisma } from '../prisma.js';
 import {
@@ -18,11 +18,11 @@ import {
 
 const router = express.Router();
 
-// Bütün body-ləri (JSON, form, XML, düz mətn) sadəcə STRİNQ kimi qəbul edirik —
-// heç nə parse/icra olunmur, sadəcə saxlanılır.
+// Every body (JSON, form, XML, plain text) is taken as a plain STRING —
+// nothing is parsed or executed, it is only stored.
 router.use(express.text({ type: () => true, limit: '512kb' }));
 
-// Admin/idarəetmə tələləri — mağazanın "arxa qapısı" kimi görünən skaner hədəfləri.
+// Admin/management lures — scanner targets that look like the store's "back door".
 const ADMIN_LURES = [
   '/admin',
   '/administrator',
@@ -32,10 +32,10 @@ const ADMIN_LURES = [
   '/.env.bak',
 ];
 
-// Ödəniş endpointləri — hücumçunun formadan göndərdiyi (saxta) kart datası bura düşür.
+// Payment endpoints — the (fake) card data an attacker submits lands here.
 const PAYMENT_PATHS = ['/checkout', '/pay', '/api/pay', '/api/checkout', '/payment'];
 
-// Saxta "həssas fayl" cavabları — məzmun tamamilə DƏYƏRSİZ və uydurmadır.
+// Fake "sensitive file" responses — the content is completely WORTHLESS and made up.
 const SENSITIVE_FILES = {
   '/.env': {
     type: 'text/plain',
@@ -86,14 +86,14 @@ function normalizePath(rawPath) {
   return lower;
 }
 
-// Hansı tələnin işə düşdüyünü təyin edir.
+// Determines which lure was triggered.
 function detectRoute(req) {
   const p = normalizePath(req.path);
   const method = req.method;
 
   if (SENSITIVE_FILES[p]) return 'sensitive-file-probe';
   if (ADMIN_LURES.includes(p)) return 'admin-lure';
-  // Ödəniş: POST = saxta kart göndərişi, GET = ödəniş səhifəsi.
+  // Payment: POST = fake card submission, GET = the payment page.
   if (PAYMENT_PATHS.includes(p)) return method === 'GET' ? 'checkout' : 'fake-payment';
   if (ACCOUNT_LOGIN_PATHS.includes(p)) return 'login-lure';
   if (p === '/' || p === '/shop' || p === '/products') return 'storefront';
@@ -109,8 +109,8 @@ function clientIp(req) {
   return raw.replace(/^::ffff:/, '') || 'unknown';
 }
 
-// Hər sorğunu bazaya yazır. Cavab gözləmir və loglama uğursuz olsa belə sorğu
-// cavablandırılır — honeypot heç vaxt "sınmış" və ya yavaş görünməməlidir.
+// Writes every request to the database. It does not await the write, and the request
+// is answered even if logging fails — the honeypot must never look "broken" or slow.
 function logRequest(req, route) {
   const body = typeof req.body === 'string' ? req.body : '';
   const queryIndex = req.originalUrl.indexOf('?');
@@ -133,7 +133,7 @@ function logRequest(req, route) {
     });
 }
 
-// Catch-all: bütün metodlar, bütün yollar.
+// Catch-all: every method, every path.
 router.all(/.*/, (req, res) => {
   const route = detectRoute(req);
   logRequest(req, route);
@@ -148,20 +148,20 @@ router.all(/.*/, (req, res) => {
     return;
   }
 
-  // Real bir mağaza kimi görünmək üçün başlıqlar.
+  // Headers that make it look like a real store.
   res.set('Server', 'nginx/1.24.0');
   res.set('X-Powered-By', 'Express');
 
   const p = normalizePath(req.path);
 
-  // Həssas fayl — saxta, dəyərsiz məzmun.
+  // Sensitive file — fake, worthless content.
   if (route === 'sensitive-file-probe') {
     const file = SENSITIVE_FILES[p];
     res.status(200).type(file.type).send(file.body);
     return;
   }
 
-  // Admin tələsi — saxta hesab girişi göstərilir, POST həmişə uğursuz.
+  // Admin lure — a fake account login is shown, POST always fails.
   if (route === 'admin-lure') {
     if (req.method === 'POST') {
       res.status(401).type('html').send(accountLoginPage({ error: 'Invalid username or password.' }));
@@ -171,7 +171,7 @@ router.all(/.*/, (req, res) => {
     return;
   }
 
-  // Hesaba giriş / qeydiyyat tələsi.
+  // Account login / registration lure.
   if (route === 'login-lure') {
     if (req.method === 'POST') {
       res.status(401).type('html').send(accountLoginPage({ error: 'Incorrect email or password.' }));
@@ -181,8 +181,8 @@ router.all(/.*/, (req, res) => {
     return;
   }
 
-  // SAXTA ödəniş: POST-la gələn kart datası artıq loglandı. HEÇ NƏ emal olunmur —
-  // həmişə "rədd edildi" göstərilir ki, hücumçu başqa kartlar sınamağa davam etsin.
+  // FAKE payment: the card data posted here has already been logged. NOTHING is processed —
+  // it always shows "declined" so the attacker keeps trying more cards.
   if (route === 'fake-payment') {
     res.status(402).type('html').send(paymentDeclinedPage());
     return;
@@ -217,7 +217,7 @@ router.all(/.*/, (req, res) => {
     return;
   }
 
-  // Qalan hər şey — saxta 404.
+  // Everything else — a fake 404.
   res.status(404).type('html').send(notFoundPage());
 });
 

@@ -1,5 +1,5 @@
-// Demo trafiki — honeypota nümunə hücum sorğuları göndərir (yalnız ÖZ serverinə).
-// İstifadə:  npm run demo
+// Demo traffic — sends sample attack requests to the honeypot (YOUR OWN server only).
+// Usage:  npm run demo
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -20,25 +20,25 @@ const UA = {
 };
 
 const requests = [
-  // Normal alış-veriş trafiki (fon üçün)
+  // Normal shopping traffic (background noise)
   { m: 'GET', p: '/', ua: UA.browser },
   { m: 'GET', p: '/shop', ua: UA.browser },
   { m: 'GET', p: '/product/2', ua: UA.browser },
   { m: 'GET', p: '/cart', ua: UA.browser },
 
-  // SQL injection — məhsul id və axtarış üzərindən
+  // SQL injection — via product id and search
   { m: 'GET', p: "/product/1' OR '1'='1", ua: UA.sqlmap },
   { m: 'GET', p: '/search?q=1 UNION SELECT card_number,cvv FROM payments--', ua: UA.sqlmap },
   { m: 'POST', p: '/account/login', ua: UA.sqlmap, body: "email=admin'--&password=x" },
 
-  // Saxta ödəniş forması — hücumçunun göndərdiyi (uydurma) kart datası
+  // Fake payment form — the (made-up) card data an attacker submits
   { m: 'POST', p: '/checkout', ua: UA.curl,
     body: 'card_name=John Doe&card_number=4242424242424242&card_expiry=12/34&card_cvv=123&email=a@b.co' },
   { m: 'POST', p: '/checkout', ua: UA.curl,
     body: 'card_name=Test&card_number=4000000000000002&card_expiry=01/30&card_cvv=999&email=x@y.co' },
   { m: 'POST', p: '/api/pay', ua: UA.curl, json: true,
     body: '{"card_number":"5555555555554444","cvv":"321","amount":9999}' },
-  // Ödəniş sahəsində SQL injection cəhdi
+  // SQL injection attempt in a payment field
   { m: 'POST', p: '/checkout', ua: UA.sqlmap,
     body: "card_number=1' OR '1'='1&card_cvv=1&card_expiry=1&card_name=x&email=x" },
 
@@ -54,7 +54,7 @@ const requests = [
   { m: 'GET', p: '/ping?host=127.0.0.1;cat /etc/shadow', ua: UA.curl },
   { m: 'POST', p: '/api/exec', ua: UA.curl, body: '{"cmd":"| whoami"}', json: true },
 
-  // Həssas fayl yoxlaması
+  // Sensitive file probe
   { m: 'GET', p: '/.env', ua: UA.bot },
   { m: 'GET', p: '/.git/config', ua: UA.bot },
   { m: 'GET', p: '/config.php', ua: UA.bot },
@@ -64,7 +64,7 @@ const requests = [
   { m: 'GET', p: '/wp-login.php', ua: UA.nikto },
   { m: 'GET', p: '/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php', ua: UA.nikto },
 
-  // Brute-force (admin panelə ardıcıl login cəhdləri)
+  // Brute force (repeated login attempts against the admin panel)
   ...['admin:admin', 'admin:123456', 'admin:password', 'root:toor', 'admin:qwerty'].map((pair) => {
     const [u, pw] = pair.split(':');
     return { m: 'POST', p: '/admin', ua: UA.curl, body: `username=${u}&password=${pw}` };

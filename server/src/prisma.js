@@ -1,5 +1,5 @@
-// Prisma client-in TƏK nüsxəsi. Bütün modullar bunu import etməlidir.
-// `node --watch` restart edəndə təkrar bağlantı yaranmasın deyə globalThis-də saxlanılır.
+// The SINGLE Prisma client instance. Every module must import this one.
+// Kept on globalThis so `node --watch` restarts do not open a new connection each time.
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis;

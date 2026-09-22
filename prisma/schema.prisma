@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL") // pooled (6543)
-  directUrl = env("DIRECT_URL")   // direct (5432) — migration üçün
+  directUrl = env("DIRECT_URL")   // direct (5432) — used for migrations
 }
 
 model HoneypotEvent {
@@ -18,8 +18,8 @@ model HoneypotEvent {
   userAgent String?
   headers   Json
   body      String?
-  route     String?  // hansı saxta tələ işə düşdü
-  attackType String? // AI doldurur
+  route     String?  // which fake lure was triggered
+  attackType String? // filled in by the AI
   severity   String? // low | medium | high
   analyzed   Boolean @default(false)
 

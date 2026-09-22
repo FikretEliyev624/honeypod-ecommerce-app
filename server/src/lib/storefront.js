@@ -1,11 +1,11 @@
-// SAXTA e-commerce mağazasının HTML səhifələri — honeypot tələsi.
-// Burada HEÇ BİR real ödəniş, real məhsul, real kart emalı yoxdur.
-// Göstərilən "test kartı" hamıya məlum ictimai test nömrəsidir (real kart deyil).
-// Məqsəd: saytı inandırıcı göstərib hücumçunun sorğularını cəlb etmək və loglamaq.
+// HTML pages of the FAKE e-commerce store — the honeypot lure.
+// There is NO real payment, NO real product and NO real card processing here.
+// The "test card" shown is a well-known public test number (not a real card).
+// Goal: look convincing enough to attract attacker requests and log them.
 
 export const STORE_NAME = 'NovaShop';
 
-// Uydurma məhsullar. Qiymətlər/anbarlar tamamilə saxtadır.
+// Made-up products. Prices and stock are entirely fake.
 export const PRODUCTS = [
   { id: 1, name: 'Aurora Wireless Headphones', price: 149.99, emoji: '🎧', cat: 'Audio',
     desc: 'Active noise cancelling, 30-hour battery, Bluetooth 5.3.' },
@@ -21,7 +21,7 @@ export const PRODUCTS = [
     desc: '16 million colours, voice control, app support.' },
 ];
 
-// Bütün səhifələr üçün ümumi çərçivə.
+// Shared shell used by every page.
 function layout(title, body) {
   return `<!doctype html>
 <html lang="en">
@@ -156,8 +156,8 @@ export function shopPage() {
   return layout('Shop', body);
 }
 
-// Axtarış nəticəsi — hücumçunun yazdığı sorğu (q) səhifədə göstərilmir (XSS-i əks
-// etdirmirik), sadəcə mətn kimi qaçış edilib göstərilir.
+// Search results — the attacker's query (q) is never reflected as HTML (we do not
+// echo XSS back), it is escaped and shown as plain text.
 export function searchPage(rawQuery) {
   const safe = String(rawQuery || '')
     .replace(/&/g, '&amp;')
@@ -220,7 +220,7 @@ export function cartPage() {
   return layout('Cart', body);
 }
 
-// SAXTA ödəniş formu. Real emal YOXDUR. Göstərilən nümunə kart ictimai test kartıdır.
+// FAKE payment form. There is NO real processing. The sample card is a public test card.
 export function checkoutPage({ error = '' } = {}) {
   const items = PRODUCTS.slice(0, 2);
   const total = items.reduce((s, p) => s + p.price, 0);
@@ -267,7 +267,7 @@ export function checkoutPage({ error = '' } = {}) {
   return layout('Checkout', body);
 }
 
-// Ödəniş "nəticəsi" — həmişə uğursuz. Heç bir kart emal olunmur.
+// Payment "result" — always a failure. No card is ever processed.
 export function paymentDeclinedPage() {
   const body = `<div class="notice warn">
     The payment could not be processed. Your bank declined the transaction (code: DO_NOT_HONOR).
@@ -293,7 +293,7 @@ export function notFoundPage() {
   return layout('404', body);
 }
 
-// E-commerce hesab girişi (admin deyil) — saxta login.
+// Storefront account login (not the admin one) — a fake login form.
 export function accountLoginPage({ error = '' } = {}) {
   const errBlock = error ? `<div class="notice err">${error}</div>` : '';
   const body = `<div style="max-width:380px;margin:20px auto;">

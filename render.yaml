@@ -41,7 +41,7 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile
+        value: openai/gpt-oss-120b # Groq retired llama-3.3-70b-versatile; alt: qwen/qwen3.6-27b
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL

@@ -157,6 +157,7 @@ a note about it is added to the report.
 | `No new events to analyze.` | send some traffic to the honeypot first (`npm run demo`) |
 | `vite: not found` / `prisma: not found` during a hosted build | the build ran with `NODE_ENV=production`, which skips devDependencies — use `npm ci --include=dev` |
 | the dashboard service exits right after start | it would be public without credentials — set `DASHBOARD_USER` and `DASHBOARD_PASSWORD` |
+| `LLM request failed … model_not_found` | the provider retired that model — set `GROQ_MODEL`/`GEMINI_MODEL` to one your key can list (`curl -s https://api.groq.com/openai/v1/models -H "Authorization: Bearer $GROQ_API_KEY"`) |
 
 ## Deployment
 

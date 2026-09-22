@@ -3,7 +3,7 @@
 
 const DEFAULTS = {
   ollama: 'llama3.1',
-  groq: 'llama-3.3-70b-versatile',
+  groq: 'openai/gpt-oss-120b',
   gemini: 'gemini-2.0-flash',
 };
 

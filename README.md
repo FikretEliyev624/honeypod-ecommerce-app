@@ -158,6 +158,7 @@ a note about it is added to the report.
 | `vite: not found` / `prisma: not found` during a hosted build | the build ran with `NODE_ENV=production`, which skips devDependencies — use `npm ci --include=dev` |
 | the dashboard service exits right after start | it would be public without credentials — set `DASHBOARD_USER` and `DASHBOARD_PASSWORD` |
 | `LLM request failed … model_not_found` | the provider retired that model — set `GROQ_MODEL`/`GEMINI_MODEL` to one your key can list (`curl -s https://api.groq.com/openai/v1/models -H "Authorization: Bearer $GROQ_API_KEY"`) |
+| `LLM request failed … 429 … tokens per minute (TPM)` | the provider rate limited the key. A 429 is already retried with the delay it reports; if it still fails, lower `ANALYZE_BATCH_SIZE` (e.g. `15`) or `ANALYZE_MAX_EVENTS`, or switch to a local `LLM_PROVIDER="ollama"`. Batches that did go through stay saved — press Analyze again for the rest |
 
 ## Deployment
 

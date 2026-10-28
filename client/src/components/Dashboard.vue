@@ -101,9 +101,14 @@ async function analyze(reanalyze = false) {
       body: JSON.stringify({ reanalyze }),
     });
     const verb = reanalyze ? 're-classified' : 'classified';
-    notice.value = data.fallback
-      ? `Analysis finished, but the model response could not be parsed — ${data.report.eventCount} events marked unknown/low.`
-      : `Analysis finished: ${data.report.eventCount} events ${verb} (${data.report.model}).`;
+    // A run can stop early (rate limit) or leave events for the next one — say so.
+    const parts = [
+      data.fallback
+        ? `Analysis finished, but the model response could not be parsed — ${data.report.eventCount} events fell back to their trap category.`
+        : `Analysis finished: ${data.report.eventCount} events ${verb} (${data.report.model}).`,
+    ];
+    if (data.warning) parts.push(data.warning);
+    notice.value = parts.join(' ');
     await loadAll({ silent: true });
   } catch (err) {
     error.value = `Analysis failed: ${err.message}`;
@@ -179,7 +184,7 @@ onUnmounted(() => clearInterval(timer));
         <button
           class="btn ghost"
           :disabled="analyzing"
-          title="Re-classifies every event, including already analyzed ones, with the current model"
+          title="Re-classifies the newest events, including already analyzed ones, with the current model"
           @click="analyze(true)"
         >
           Re-analyze

@@ -18,7 +18,30 @@ const ATTACK_TYPES = [
 
 const SEVERITIES = ['low', 'medium', 'high'];
 
-const MAX_EVENTS = 80;
+// The honeypot already knows which trap a request hit, so a few categories are certain
+// without asking the model. These are used when the model returns no verdict for an
+// event, or answers "unknown" for a request that provably went after a trap.
+const TRAP_CLASSIFICATION = {
+  'sensitive-file-probe': { attackType: 'sensitive_file_probe', severity: 'medium' },
+  'admin-lure': { attackType: 'scanner_bot', severity: 'low' },
+};
+
+function trapClassification(event) {
+  // A POST to a login/admin lure carries credentials — a brute-force attempt.
+  if ((event.route === 'login-lure' || event.route === 'admin-lure') && event.method === 'POST') {
+    return { attackType: 'brute_force', severity: 'medium' };
+  }
+  return TRAP_CLASSIFICATION[event.route] || null;
+}
+
+// One LLM request per batch. A hosted free tier has a tight tokens-per-minute budget
+// (Groq's free tier: 8000 TPM) and ~80 events in a single prompt already exceed it, so
+// the batch is kept small and llm.js waits out the rate limit between batches.
+const BATCH_SIZE = Number(process.env.ANALYZE_BATCH_SIZE) || 25;
+
+// Upper bound for one /api/analyze call, so re-analysing a large database cannot run
+// for an unbounded time. Whatever is left over is picked up by the next run.
+const MAX_EVENTS = Number(process.env.ANALYZE_MAX_EVENTS) || 200;
 
 function trim(value, max) {
   if (!value) return '';
@@ -127,26 +150,35 @@ function extractJsonArray(raw) {
   }
 }
 
-// Maps the model's classification back onto the events.
-// If parsing fails or a value is outside the allowed list — unknown/low fallback.
+// Maps the model's classification back onto the events. The model decides, but an event
+// it skipped or called "unknown" still gets the category its trap proves, so a probe of
+// /.env is never left without one. Everything else — unknown/low.
 function mapClassifications(events, parsed) {
-  const result = events.map((e) => ({ id: e.id, attackType: 'unknown', severity: 'low' }));
-  if (!parsed) return { result, fallback: true };
-
-  let matched = 0;
-  for (const item of parsed) {
+  const byIndex = new Map();
+  for (const item of parsed || []) {
     const index = Number(item?.id) - 1;
     if (!Number.isInteger(index) || index < 0 || index >= events.length) continue;
 
     const attackType = String(item?.attackType || '').toLowerCase().trim();
     const severity = String(item?.severity || '').toLowerCase().trim();
 
-    result[index].attackType = ATTACK_TYPES.includes(attackType) ? attackType : 'unknown';
-    result[index].severity = SEVERITIES.includes(severity) ? severity : 'low';
-    matched += 1;
+    byIndex.set(index, {
+      attackType: ATTACK_TYPES.includes(attackType) ? attackType : 'unknown',
+      severity: SEVERITIES.includes(severity) ? severity : 'low',
+    });
   }
 
-  return { result, fallback: matched === 0 };
+  const result = events.map((event, index) => {
+    const fromModel = byIndex.get(index);
+    if (fromModel && fromModel.attackType !== 'unknown') return { id: event.id, ...fromModel };
+
+    const fromTrap = trapClassification(event);
+    if (fromTrap) return { id: event.id, ...fromTrap };
+
+    return { id: event.id, ...(fromModel || { attackType: 'unknown', severity: 'low' }) };
+  });
+
+  return { result, fallback: byIndex.size === 0 };
 }
 
 // [{type, severity, count}] breakdown
@@ -191,27 +223,32 @@ async function classifyBatch(events) {
   const { result: classifications, fallback } = mapClassifications(events, parsed);
 
   if (fallback) {
-    console.warn('[analyze] Could not parse the model response — this batch was marked unknown/low.');
+    console.warn('[analyze] Could not parse the model response — this batch fell back to trap categories.');
   }
   await persistClassifications(classifications);
   return { classifications, fallback };
 }
 
 // POST /api/analyze
-//   body.reanalyze=true  → old (already analyzed) events are re-classified with the
-//                          current prompt too (all of them, batch by batch).
-//   default               → only unanalyzed events (the newest ${MAX_EVENTS}).
+//   body.reanalyze=true  -> already analyzed events are re-classified with the current
+//                          prompt as well.
+//   default               -> only unanalyzed events.
+// Either way at most MAX_EVENTS events (newest first) are handled per call, in batches
+// of BATCH_SIZE. Whatever a batch classified is already saved, so a provider failure
+// halfway through never throws away the work that succeeded.
 router.post('/api/analyze', async (req, res, next) => {
   try {
     const reanalyze = req.body?.reanalyze === true;
+    const where = reanalyze ? {} : { analyzed: false };
 
-    // A re-analysis takes every event, otherwise only the new ones.
-    const allEvents = await prisma.honeypotEvent.findMany({
-      where: reanalyze ? {} : { analyzed: false },
-      orderBy: { createdAt: 'desc' },
-      // Re-analysis takes all of them, normal mode takes a single batch.
-      take: reanalyze ? undefined : MAX_EVENTS,
-    });
+    const [allEvents, matchingTotal] = await Promise.all([
+      prisma.honeypotEvent.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: MAX_EVENTS,
+      }),
+      prisma.honeypotEvent.count({ where }),
+    ]);
 
     if (allEvents.length === 0) {
       res.status(400).json({
@@ -220,50 +257,85 @@ router.post('/api/analyze', async (req, res, next) => {
       return;
     }
 
-    // Split the events into batches of ${MAX_EVENTS} (to fit the LLM context).
     const classifications = [];
     let fallback = false;
-    try {
-      for (let i = 0; i < allEvents.length; i += MAX_EVENTS) {
-        const batch = allEvents.slice(i, i + MAX_EVENTS);
-        const res2 = await classifyBatch(batch);
-        classifications.push(...res2.classifications);
-        fallback = fallback || res2.fallback;
+    let failure = null;
+
+    for (let i = 0; i < allEvents.length; i += BATCH_SIZE) {
+      const batch = allEvents.slice(i, i + BATCH_SIZE);
+      try {
+        const batchResult = await classifyBatch(batch);
+        classifications.push(...batchResult.classifications);
+        fallback = fallback || batchResult.fallback;
+      } catch (err) {
+        // Unreachable, misconfigured, or still rate limited after the retries in llm.js.
+        // Stop here and keep the batches that did go through.
+        console.error('[analyze] Classification failed:', err.message);
+        failure = err;
+        break;
       }
-    } catch (err) {
-      // The provider is unreachable / misconfigured. Report the actual reason instead of a
-      // generic 500 — it names the provider, not any credential.
-      console.error('[analyze] Classification failed:', err.message);
+    }
+
+    // Not a single batch got through — report the actual reason instead of a generic 500.
+    // The message names the provider, never a credential.
+    if (classifications.length === 0) {
       res.status(502).json({
-        error: `LLM request failed (${llmLabel()}): ${trim(err.message, 300)}`,
+        error: `LLM request failed (${llmLabel()}): ${trim(failure.message, 300)}`,
       });
       return;
     }
 
-    const events = allEvents; // used as context below
+    // The report covers only the events that really were classified.
+    const events = allEvents.slice(0, classifications.length);
+    const pending = Math.max(matchingTotal - events.length, 0);
+
+    const warnings = [];
+    if (failure) {
+      warnings.push(
+        `Stopped after ${events.length} of ${allEvents.length} events: ${trim(failure.message, 200)}`,
+      );
+    }
+    if (pending > 0) warnings.push(`${pending} event(s) left for the next run.`);
 
     // Breakdown + context
     const breakdown = buildBreakdown(classifications);
     const topIps = [...new Set(events.map((e) => e.ip))].slice(0, 5);
     const topPaths = [...new Set(events.map((e) => trim(e.path, 60)))].slice(0, 8);
 
-    // 4) Second LLM call for the summary — the report is created even if it fails.
+    // Second LLM call for the summary. If classification already hit a wall there is no
+    // point spending another rate-limited request — the breakdown is summarised locally.
+    const localSummary = () =>
+      `${events.length} events were classified: ` +
+      breakdown.map((b) => `${b.type}/${b.severity}: ${b.count}`).join(', ') + '.';
+
     let summary;
-    try {
-      summary = (await askLLM(buildSummaryPrompt(breakdown, events.length, topIps, topPaths))).trim();
-    } catch (err) {
-      console.error('[analyze] Summary failed:', err.message);
-      summary =
-        `The summary model did not respond (${err.message}). ` +
-        `${events.length} events were classified: ` +
-        breakdown.map((b) => `${b.type}/${b.severity}: ${b.count}`).join(', ') + '.';
+    if (failure) {
+      summary = localSummary();
+    } else {
+      try {
+        summary = (
+          await askLLM(buildSummaryPrompt(breakdown, events.length, topIps, topPaths))
+        ).trim();
+      } catch (err) {
+        console.error('[analyze] Summary failed:', err.message);
+        summary = `The summary model did not respond (${err.message}). ${localSummary()}`;
+      }
     }
 
+    // Anything the operator needs to know about this run goes on top of the summary.
+    const notes = [];
     if (fallback) {
-      summary = `[Note: the model response could not be parsed, events were marked unknown/low.]\n\n${summary}`;
+      notes.push(
+        'Note: the model response could not be parsed; events fell back to the category ' +
+          'their trap proves, or to unknown/low.',
+      );
+    }
+    notes.push(...warnings);
+    if (notes.length) {
+      summary = `[${notes.join(' ')}]\n\n${summary}`;
     }
 
-    // 5) Store the report
+    // Store the report
     const report = await prisma.report.create({
       data: {
         model: llmLabel(),
@@ -273,7 +345,13 @@ router.post('/api/analyze', async (req, res, next) => {
       },
     });
 
-    res.json({ report, fallback });
+    res.json({
+      report,
+      fallback,
+      analyzed: events.length,
+      pending,
+      warning: warnings.join(' ') || null,
+    });
   } catch (err) {
     next(err);
   }

@@ -46,7 +46,16 @@ Dockerfile, docker-compose.yml, .dockerignore   deploy
 
 `attackType`: sql_injection, path_traversal, xss, command_injection, scanner_bot,
 brute_force, sensitive_file_probe, unknown — `severity`: low | medium | high.
-Model cavabı parse olunmasa → hamısı `unknown`/`low` (fallback).
+- Model qərar verir. Model bir event-ə cavab verməsə (ya da `unknown` desə), honeypot-un
+  bildiyi tələdən dəqiq kateqoriya götürülür (`trapClassification`): `sensitive-file-probe`
+  → sensitive_file_probe/medium, `admin-lure`/`login-lure` + POST → brute_force/medium,
+  `admin-lure` + GET → scanner_bot/low. Qalanı `unknown`/`low`.
+- Bir /api/analyze çağırışı ən çox `ANALYZE_MAX_EVENTS` (200) event-i,
+  `ANALYZE_BATCH_SIZE` (25) ölçülü batch-larla işləyir — Groq free tier-in TPM limiti
+  üçün. Uğurlu batch-lar dərhal DB-ə yazılır, sonrakı batch uğursuz olsa da itmir;
+  cavabda `analyzed`, `pending`, `warning` qaytarılır.
+- `llm.js` 429/5xx cavabını provayderin dediyi qədər gözləyib `LLM_MAX_RETRIES` dəfə
+  təkrarlayır; 401/404 kimi xətalar təkrarlanmır.
 
 ## Deploy
 
